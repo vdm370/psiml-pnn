@@ -10,11 +10,11 @@ from gym import wrappers
 
 EPISODES_COUNT = 100000 #TODO: Hyperparameter #1
 EPSILON_START = 1 #TODO: Hyperparameter #2
-EPSILON_FINISH = 0.01 #TODO: Hyperparameter #3
+EPSILON_FINISH = 0.05 #TODO: Hyperparameter #3
 EPSILON_ENDS = 50000 #TODO: Hyperparameter #4
 DISCOUNT_RATE = 0.99 #TODO: Hyperparameter #5
 LEARNING_RATE = 0.01 #TODO: Hyperparameter #6
-NEURON_COUNT = 16 #TODO: Hyperparameter #7
+NEURON_COUNT = 20 #TODO: Hyperparameter #7
 
 episodes_done = 0
 
@@ -25,12 +25,12 @@ class Agent:
         self.model = self.initialize_model()
         
     def initialize_model(self): #we'll have two layers, both of them with @param NEURON_COUNT /@ neurons inside them, both activations are defaultly set to be RelU
-        input_layer = Input(shape = (self.state_count, ))
+        input_layer = Input(shape = (self.state_count, ), name = 'input_layer')
         
-        hidden_layer_1 = Dense(NEURON_COUNT, activation = 'relu')(input_layer)
-        hidden_layer_2 = Dense(NEURON_COUNT, activation = 'relu')(hidden_layer_1)
+        hidden_layer_1 = Dense(NEURON_COUNT, activation = 'relu', name = 'hidden_layer_1')(input_layer)
+        hidden_layer_2 = Dense(NEURON_COUNT, activation = 'relu', name = 'hidden_layer_2')(hidden_layer_1)
         
-        output_layer = Dense(self.act_count, activation = 'linear')(hidden_layer_2)
+        output_layer = Dense(self.act_count, activation = 'linear', name = 'output_layer')(hidden_layer_2)
         
         model = Model(inputs = input_layer, outputs = output_layer)
         model.compile(optimizer = 'adam', loss = 'mse', metrics = ['accuracy'])
@@ -68,6 +68,8 @@ def main():
     ACTION_COUNT = env.action_space.n #number of possible actions we can make
     agent = Agent(ACTION_COUNT, STATE_COUNT)
     
+    tmpModel = agent.model
+
     while episodes_done < EPISODES_COUNT: #we are playing EPISODES_COUNT (hyperparameter) episodes before finishing our training
         state = env.reset() #beginning new instance of the game
         state = np.reshape(state, [1, -1]) #unfortunately, we have to reshape this thing here
@@ -76,20 +78,26 @@ def main():
             steps_made += 1
             action = agent.act(state) #finds the next action we are supposed to play
             next_state, current_reward, done, useless = env.step(action) #we are actually playing that action right now
+            
             if done:
                 current_reward = -100 #punish the agent if the game is already lost
+            
             next_state = np.reshape(next_state, [1, -1]) #and this thing here, again
             if done:
                 episodes_done += 1
                 print('Episode ' + str(episodes_done) + ', score achieved ' + str(steps_made))
                 break
-            target = current_reward + DISCOUNT_RATE * np.amax(agent.model.predict(next_state)[0]) #`training` part of the code
-            target_f = agent.model.predict(next_state)
+
+            #target = current_reward + DISCOUNT_RATE * np.amax(agent.model.predict(next_state)[0]) #`training` part of the code
+            target = current_reward + DISCOUNT_RATE * np.amax(tmpModel.predict(next_state)[0])
+            #target_f = agent.model.predict(next_state)
+            target_f = tmpModel.predict(next_state)
             target_f[0][action] = target
             agent.model.fit(state, target_f, epochs = 3, verbose = 0) #epochs is a hyperparameter
-            
+
+        if (episodes_done % 100 == 99):
+            tmpModel = Model(inputs = agent.model.input, outputs = agent.model.output)
+            agent.model.save('saved_models/model_' + str(episodes_done) + '.h5')
+
 if __name__ == '__main__':
     main()
-            
-        
-        
